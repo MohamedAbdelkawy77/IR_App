@@ -11,7 +11,7 @@ class Irapp extends StatelessWidget {
       appBar: AppBar(
         centerTitle: true,
         title: Text(
-          "Information Retrival",
+          "Information Retrival ProJect",
           style: TextStyle(fontSize: 20, color: Colors.white),
         ),
         backgroundColor: maincolor,

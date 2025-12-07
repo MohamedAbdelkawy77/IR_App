@@ -9,6 +9,16 @@ List<Color> MycolorApp = [
   const Color(0xFF640D5F), // بنفسجي غامق مائل للوردي
   const Color(0xFFEA2264), // وردي فاقع
   const Color(0xFFF78D60), // برتقالي فاتح
+  const Color(0xFF31326F),
+  const Color(0xFF0D1164), // كحلي غامق
+  const Color(0xFF640D5F), // بنفسجي غامق مائل للوردي
+  const Color(0xFFEA2264), // وردي فاقع
+  const Color(0xFFF78D60), // برتقالي فات
+  const Color(0xFF31326F),
+  const Color(0xFF0D1164), // كحلي غامق
+  const Color(0xFF640D5F), // بنفسجي غامق مائل للوردي
+  const Color(0xFFEA2264), // وردي فاقع
+  const Color(0xFFF78D60), // برتقالي فات
 ];
 
 void main() {

@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show File;
 import 'package:irassimant/main.dart';
+
+// For web
+import 'package:file_picker/file_picker.dart'
+    if (dart.library.html) 'package:file_picker/file_picker.dart';
 
 class GetTextfeilds extends StatefulWidget {
   const GetTextfeilds({
@@ -16,34 +22,37 @@ class GetTextfeilds extends StatefulWidget {
 }
 
 class _GetTextfeildsState extends State<GetTextfeilds> {
-  late List<TextEditingController> _controllers;
+  late final List<TextEditingController> _controllers;
 
   @override
   void initState() {
     super.initState();
- 
+    _initializeControllers();
+  }
+
+  void _initializeControllers() {
     _controllers = List.generate(
       widget.Numbers,
-      (index) => TextEditingController(
-        text: index < widget.Documents.length ? widget.Documents[index] : '',
-      ),
+      (index) {
+        final controller = TextEditingController(
+          text: index < widget.Documents.length ? widget.Documents[index] : '',
+        );
+        controller.addListener(() => _updateDocument(index, controller.text));
+        return controller;
+      },
+      growable: false,
     );
+  }
 
- 
-    for (int i = 0; i < _controllers.length; i++) {
-      final index = i;
-      _controllers[i].addListener(() {
-        if (index < widget.Documents.length) {
-          widget.Documents[index] = _controllers[index].text;
-        }
-      });
+  void _updateDocument(int index, String text) {
+    if (index < widget.Documents.length) {
+      widget.Documents[index] = text;
     }
   }
 
   @override
   void dispose() {
- 
-    for (var controller in _controllers) {
+    for (final controller in _controllers) {
       controller.dispose();
     }
     super.dispose();
@@ -51,58 +60,314 @@ class _GetTextfeildsState extends State<GetTextfeilds> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: List.generate(widget.Numbers, (index) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: widget.Numbers,
+      itemBuilder: (context, index) {
         return Padding(
           padding: const EdgeInsets.all(10.0),
           child: Listoftextfeils(
             controller: _controllers[index],
-            color: MycolorApp[index],
+            color: MycolorApp[index % MycolorApp.length],
+            index: index,
           ),
         );
-      }),
+      },
     );
   }
 }
 
-class Listoftextfeils extends StatelessWidget {
+class Listoftextfeils extends StatefulWidget {
   const Listoftextfeils({
     super.key,
     required this.controller,
     required this.color,
+    required this.index,
   });
 
   final TextEditingController controller;
   final Color color;
+  final int index;
+
+  @override
+  State<Listoftextfeils> createState() => _ListoftextfeilsState();
+}
+
+class _ListoftextfeilsState extends State<Listoftextfeils> {
+  bool _isFileUploaded = false;
+  String? _fileName;
+  bool _isUploading = false;
+
+  static const int _maxFileSize = 5 * 1024 * 1024; // 5MB
+  static const List<String> _allowedExtensions = ['txt', 'pdf', 'doc', 'docx'];
+
+  Future<void> _pickFile() async {
+    if (_isUploading) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _allowedExtensions,
+        allowMultiple: false,
+        withData: kIsWeb, // Use bytes for web, path for mobile
+        withReadStream: !kIsWeb,
+      );
+
+      if (result == null || !mounted) {
+        setState(() => _isUploading = false);
+        return;
+      }
+
+      final platformFile = result.files.single;
+      final fileSize = platformFile.size;
+
+      if (fileSize > _maxFileSize) {
+        _showErrorSnackBar('File too large. Maximum size is 5MB');
+        setState(() => _isUploading = false);
+        return;
+      }
+
+      String content;
+
+      // Handle web platform
+      if (kIsWeb) {
+        if (platformFile.bytes == null) {
+          _showErrorSnackBar('Could not read file');
+          setState(() => _isUploading = false);
+          return;
+        }
+        content = String.fromCharCodes(platformFile.bytes!);
+      }
+      // Handle mobile/desktop platforms
+      else {
+        if (platformFile.path == null) {
+          _showErrorSnackBar('Could not access file');
+          setState(() => _isUploading = false);
+          return;
+        }
+        final file = File(platformFile.path!);
+        content = await file.readAsString();
+      }
+
+      if (!mounted) return;
+
+      widget.controller.text = content;
+      setState(() {
+        _fileName = platformFile.name;
+        _isFileUploaded = true;
+        _isUploading = false;
+      });
+
+      _showSuccessSnackBar('File "${platformFile.name}" uploaded');
+    } catch (e) {
+      if (mounted) {
+        _showErrorSnackBar('Error reading file: ${e.toString()}');
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  void _clearFile() {
+    widget.controller.clear();
+    setState(() {
+      _isFileUploaded = false;
+      _fileName = null;
+    });
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.all(8),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        margin: const EdgeInsets.all(8),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      validator: (val) {
-        if (val == null || val.trim().isEmpty) {
-          return "This feild is Required";
-        }
-        return null;
-      },
-      decoration: InputDecoration(
-        hintText: "Document Text",
-        icon: Icon(Icons.edit_document, color: color),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: color),
-          borderRadius: BorderRadius.circular(20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextFormField(
+          controller: widget.controller,
+          maxLines: 5,
+          minLines: 3,
+          validator: (val) =>
+              (val?.trim().isEmpty ?? true) ? "This field is required" : null,
+          decoration: InputDecoration(
+            hintText: "Enter document text or upload a file",
+            icon: Icon(Icons.edit_document, color: widget.color),
+            suffixIcon: _buildSuffixIcons(),
+            enabledBorder: _buildBorder(
+              _isFileUploaded ? Colors.green : widget.color,
+              _isFileUploaded ? 2 : 1,
+            ),
+            focusedBorder: _buildBorder(
+              _isFileUploaded ? Colors.green : widget.color,
+              2,
+            ),
+            errorBorder: _buildBorder(Colors.red, 1),
+            focusedErrorBorder: _buildBorder(Colors.red, 2),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: color),
-          borderRadius: BorderRadius.circular(20),
+        if (_isFileUploaded && _fileName != null) _buildFileIndicator(),
+      ],
+    );
+  }
+
+  Widget _buildSuffixIcons() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_isFileUploaded)
+          IconButton(
+            icon: const Icon(Icons.clear, color: Colors.red),
+            onPressed: _clearFile,
+            tooltip: 'Clear file',
+            splashRadius: 20,
+          ),
+        _UploadButton(
+          onPressed: _pickFile,
+          isUploading: _isUploading,
+          color: widget.color,
         ),
-        errorBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.red),
-          borderRadius: BorderRadius.circular(20),
+      ],
+    );
+  }
+
+  OutlineInputBorder _buildBorder(Color color, double width) {
+    return OutlineInputBorder(
+      borderSide: BorderSide(color: color, width: width),
+      borderRadius: BorderRadius.circular(20),
+    );
+  }
+
+  Widget _buildFileIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 48, top: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green.withOpacity(0.3)),
         ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: Colors.red),
-          borderRadius: BorderRadius.circular(20),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'File: $_fileName',
+                style: const TextStyle(
+                  color: Colors.green,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadButton extends StatelessWidget {
+  const _UploadButton({
+    required this.onPressed,
+    required this.isUploading,
+    required this.color,
+  });
+
+  final VoidCallback onPressed;
+  final bool isUploading;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color, color.withOpacity(0.7)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isUploading ? null : onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isUploading)
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                else
+                  const Icon(Icons.upload_file, color: Colors.white, size: 20),
+                const SizedBox(width: 6),
+                Text(
+                  isUploading ? 'Loading...' : 'Upload',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
