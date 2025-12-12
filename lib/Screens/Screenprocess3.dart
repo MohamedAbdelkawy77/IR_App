@@ -28,6 +28,10 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
   String selectedOperator = 'AND';
   bool isManualMode = true;
 
+  // Phrase query details
+  List<String>? phraseTerms;
+  int? phraseLength;
+
   @override
   void initState() {
     super.initState();
@@ -44,11 +48,12 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
     Map<String, List<int>> invIndex = {};
     Map<String, Map<int, List<int>>> posIndex = {};
 
-    for (int docId = 0; docId < widget.documents.length; docId++) {
-      String document = widget.documents[docId];
+    for (int i = 0; i < widget.documents.length; i++) {
+      int docId = i + 1;
+      String document = widget.documents[i];
       List<String> tokens = document
           .toLowerCase()
-          .replaceAll(RegExp(r'[^\w\s]'), ' ')
+          .replaceAll(RegExp(r'[^\u0600-\u06FF\w\s]'), ' ')
           .split(RegExp(r'\s+'))
           .where((token) => token.isNotEmpty)
           .toList();
@@ -108,6 +113,8 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
       errorMessage = null;
       currentQuery = query;
       matchingDocuments = [];
+      phraseTerms = null;
+      phraseLength = null;
     });
 
     await Future.delayed(const Duration(milliseconds: 500));
@@ -115,7 +122,22 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
     try {
       // Detect query type
       if (query.contains('"')) {
+        // Validate phrase query
+        String phrase = query.replaceAll('"', '').toLowerCase().trim();
+        List<String> terms = phrase.split(RegExp(r'\s+'));
+
+        if (terms.length < 2 || terms.length > 3) {
+          setState(() {
+            errorMessage =
+                "Phrase queries must contain 2 or 3 words. Found: ${terms.length} word(s)";
+            isProcessing = false;
+          });
+          return;
+        }
+
         queryType = QueryType.phrase;
+        phraseTerms = terms;
+        phraseLength = terms.length;
         matchingDocuments = _processPhraseQuery(query);
       } else if (query.toUpperCase().contains(' AND ')) {
         queryType = QueryType.booleanAnd;
@@ -198,7 +220,7 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
     String phrase = query.replaceAll('"', '').toLowerCase().trim();
     List<String> terms = phrase.split(RegExp(r'\s+'));
 
-    if (terms.isEmpty) return [];
+    if (terms.isEmpty || terms.length < 2 || terms.length > 3) return [];
 
     Set<int> candidateDocs = Set<int>.from(invertedIndex[terms[0]] ?? []);
 
@@ -279,27 +301,23 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           children: [
             _buildInfoCard(isSmallScreen),
             SizedBox(height: isSmallScreen ? 16 : 20),
-
-            // Mode toggle
             _buildModeToggle(isSmallScreen),
             SizedBox(height: isSmallScreen ? 16 : 20),
-
             if (!isManualMode) ...[
               _buildTermSelectionSection(isSmallScreen),
               SizedBox(height: isSmallScreen ? 16 : 20),
             ],
-
             if (isManualMode) ...[
               _buildExamplesCard(isSmallScreen),
               SizedBox(height: isSmallScreen ? 16 : 20),
             ],
-
             _buildQuerySection(isSmallScreen),
             SizedBox(height: isSmallScreen ? 16 : 20),
-
             if (currentQuery != null) ...[
               _buildResultsSection(isSmallScreen),
             ],
+            const SizedBox(height: 20),
+            _buildInvertedIndexMatrix(isSmallScreen),
           ],
         ),
       ),
@@ -378,8 +396,6 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Operator selection
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -425,8 +441,6 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Selected terms
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -495,8 +509,6 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // Select terms button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -601,7 +613,9 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           _buildExampleItem(
               'Boolean NOT:', 'apple NOT red', Colors.red, isSmall),
           _buildExampleItem(
-              'Phrase Query:', '"red apple"', Colors.orange, isSmall),
+              '2-Word Phrase:', '"red apple"', Colors.orange, isSmall),
+          _buildExampleItem(
+              '3-Word Phrase:', '"fresh red apple"', Colors.teal, isSmall),
         ],
       ),
     );
@@ -672,7 +686,7 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           controller: _queryController,
           readOnly: !isManualMode,
           decoration: InputDecoration(
-            hintText: 'e.g., apple AND orange',
+            hintText: 'e.g., "red apple" or apple AND orange',
             prefixIcon: Icon(Icons.search, color: maincolor),
             suffixIcon: _queryController.text.isNotEmpty && isManualMode
                 ? IconButton(
@@ -705,9 +719,29 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
         ),
         if (errorMessage != null) ...[
           const SizedBox(height: 8),
-          Text(
-            errorMessage!,
-            style: const TextStyle(color: Colors.red, fontSize: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade300),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    errorMessage!,
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
         const SizedBox(height: 16),
@@ -786,6 +820,17 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
                             color: Colors.grey.shade600,
                           ),
                         ),
+                        if (phraseLength != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Phrase Length: $phraseLength word${phraseLength! > 1 ? 's' : ''}',
+                            style: TextStyle(
+                              fontSize: isSmall ? 11 : 12,
+                              color: Colors.grey.shade600,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -833,7 +878,7 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
       case QueryType.booleanNot:
         return 'Boolean NOT';
       case QueryType.phrase:
-        return 'Phrase Query';
+        return 'Phrase Query (${phraseLength ?? 0} words)';
       default:
         return 'Unknown';
     }
@@ -863,7 +908,9 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Try a different query',
+              phraseLength != null
+                  ? 'The exact phrase was not found in any document'
+                  : 'Try a different query',
               style: TextStyle(
                 fontSize: isSmall ? 12 : 13,
                 color: Colors.grey.shade500,
@@ -875,7 +922,216 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
     );
   }
 
+  Widget _buildInvertedIndexMatrix(bool isSmall) {
+    List<String> allTerms = invertedIndex.keys.toList()..sort();
+    int numDocs = widget.documents.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Boolean Retrieval Model - Inverted Index Matrix',
+          style: TextStyle(
+            fontSize: isSmall ? 16 : 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade800,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                headingRowColor: MaterialStateProperty.all(
+                  maincolor.withOpacity(0.1),
+                ),
+                border: TableBorder.all(
+                  color: Colors.grey.shade300,
+                  width: 1,
+                ),
+                columnSpacing: isSmall ? 30 : 50,
+                dataRowHeight: isSmall ? 40 : 48,
+                headingRowHeight: isSmall ? 45 : 56,
+                columns: [
+                  DataColumn(
+                    label: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text(
+                        'Term',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: isSmall ? 13 : 14,
+                          color: maincolor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  ...List.generate(numDocs, (index) {
+                    return DataColumn(
+                      label: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'Doc${index + 1}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: isSmall ? 13 : 14,
+                            color: maincolor,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+                rows: allTerms.map((term) {
+                  List<int> termDocs = invertedIndex[term] ?? [];
+
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            term,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: isSmall ? 12 : 13,
+                              color: Colors.grey.shade800,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ),
+                      ...List.generate(numDocs, (index) {
+                        int docId = index + 1;
+                        bool isPresent = termDocs.contains(docId);
+
+                        return DataCell(
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isPresent
+                                    ? Colors.green.shade100
+                                    : Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                isPresent ? '1' : '0',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: isSmall ? 13 : 14,
+                                  color: isPresent
+                                      ? Colors.green.shade700
+                                      : Colors.red.shade700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline,
+                  size: isSmall ? 16 : 18, color: Colors.grey.shade600),
+              const SizedBox(width: 8),
+              Text(
+                'Legend: ',
+                style: TextStyle(
+                  fontSize: isSmall ? 11 : 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '1',
+                  style: TextStyle(
+                    fontSize: isSmall ? 11 : 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '= Term present',
+                style: TextStyle(
+                  fontSize: isSmall ? 11 : 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '0',
+                  style: TextStyle(
+                    fontSize: isSmall ? 11 : 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '= Term absent',
+                style: TextStyle(
+                  fontSize: isSmall ? 11 : 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildDocumentCard(int docId, bool isSmall) {
+    int arrayIndex = docId - 1;
+
     return Container(
       margin: EdgeInsets.only(bottom: isSmall ? 10 : 12),
       decoration: BoxDecoration(
@@ -921,7 +1177,7 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
           Padding(
             padding: EdgeInsets.all(isSmall ? 10 : 12),
             child: Text(
-              widget.documents[docId],
+              widget.documents[arrayIndex],
               style: TextStyle(
                 fontSize: isSmall ? 12 : 13,
                 color: Colors.grey.shade800,
@@ -935,7 +1191,6 @@ class _BooleanRetrievalResultState extends State<BooleanRetrievalResult> {
   }
 }
 
-// Term Selection Dialog Widget
 class _TermSelectionDialog extends StatefulWidget {
   final List<String> allTerms;
   final List<String> selectedTerms;
@@ -1014,8 +1269,6 @@ class _TermSelectionDialogState extends State<_TermSelectionDialog> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Search field
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
@@ -1043,8 +1296,6 @@ class _TermSelectionDialogState extends State<_TermSelectionDialog> {
               },
             ),
             const SizedBox(height: 16),
-
-            // Terms list
             Expanded(
               child: _filteredTerms.isEmpty
                   ? Center(
@@ -1088,10 +1339,7 @@ class _TermSelectionDialogState extends State<_TermSelectionDialog> {
                       },
                     ),
             ),
-
             const SizedBox(height: 16),
-
-            // Action buttons
             Row(
               children: [
                 if (_selectedTerms.isNotEmpty)

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show File;
 import 'package:irassimant/main.dart';
+import 'package:file_picker/file_picker.dart';
 
-// For web
-import 'package:file_picker/file_picker.dart'
-    if (dart.library.html) 'package:file_picker/file_picker.dart';
+// Add this to your pubspec.yaml:
+// dependencies:
+//   syncfusion_flutter_pdf: ^24.1.41  (for PDF parsing)
+
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 class GetTextfeilds extends StatefulWidget {
   const GetTextfeilds({
@@ -100,7 +101,29 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
   bool _isUploading = false;
 
   static const int _maxFileSize = 5 * 1024 * 1024; // 5MB
-  static const List<String> _allowedExtensions = ['txt', 'pdf', 'doc', 'docx'];
+  static const List<String> _allowedExtensions = ['txt', 'pdf'];
+
+  Future<String?> _extractTextFromPdf(List<int> bytes) async {
+    try {
+      // Load PDF document
+      final PdfDocument document = PdfDocument(inputBytes: bytes);
+      
+      // Extract text from all pages
+      String text = '';
+      for (int i = 0; i < document.pages.count; i++) {
+        text += PdfTextExtractor(document).extractText(startPageIndex: i, endPageIndex: i);
+        text += '\n'; // Add line break between pages
+      }
+      
+      // Dispose document
+      document.dispose();
+      
+      return text.trim();
+    } catch (e) {
+      debugPrint('Error extracting PDF text: $e');
+      return null;
+    }
+  }
 
   Future<void> _pickFile() async {
     if (_isUploading) return;
@@ -112,8 +135,7 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
         type: FileType.custom,
         allowedExtensions: _allowedExtensions,
         allowMultiple: false,
-        withData: kIsWeb, // Use bytes for web, path for mobile
-        withReadStream: !kIsWeb,
+        withData: true, // Always use bytes for both web and mobile
       );
 
       if (result == null || !mounted) {
@@ -130,26 +152,29 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
         return;
       }
 
-      String content;
-
-      // Handle web platform
-      if (kIsWeb) {
-        if (platformFile.bytes == null) {
-          _showErrorSnackBar('Could not read file');
-          setState(() => _isUploading = false);
-          return;
-        }
-        content = String.fromCharCodes(platformFile.bytes!);
+      if (platformFile.bytes == null) {
+        _showErrorSnackBar('Could not read file');
+        setState(() => _isUploading = false);
+        return;
       }
-      // Handle mobile/desktop platforms
-      else {
-        if (platformFile.path == null) {
-          _showErrorSnackBar('Could not access file');
+
+      String? content;
+      final extension = platformFile.extension?.toLowerCase();
+
+      // Handle different file types
+      if (extension == 'pdf') {
+        content = await _extractTextFromPdf(platformFile.bytes!);
+        if (content == null) {
+          _showErrorSnackBar('Could not extract text from PDF');
           setState(() => _isUploading = false);
           return;
         }
-        final file = File(platformFile.path!);
-        content = await file.readAsString();
+      } else if (extension == 'txt') {
+        content = String.fromCharCodes(platformFile.bytes!);
+      } else {
+        _showErrorSnackBar('Unsupported file format');
+        setState(() => _isUploading = false);
+        return;
       }
 
       if (!mounted) return;
@@ -161,7 +186,7 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
         _isUploading = false;
       });
 
-      _showSuccessSnackBar('File "${platformFile.name}" uploaded');
+      _showSuccessSnackBar('File "${platformFile.name}" uploaded successfully');
     } catch (e) {
       if (mounted) {
         _showErrorSnackBar('Error reading file: ${e.toString()}');
@@ -208,7 +233,7 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
         ),
         backgroundColor: Colors.red,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
         margin: const EdgeInsets.all(8),
       ),
     );
@@ -227,7 +252,7 @@ class _ListoftextfeilsState extends State<Listoftextfeils> {
           validator: (val) =>
               (val?.trim().isEmpty ?? true) ? "This field is required" : null,
           decoration: InputDecoration(
-            hintText: "Enter document text or upload a file",
+            hintText: "Enter document text or upload a file (TXT, PDF)",
             icon: Icon(Icons.edit_document, color: widget.color),
             suffixIcon: _buildSuffixIcons(),
             enabledBorder: _buildBorder(

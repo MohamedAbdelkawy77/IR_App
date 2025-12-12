@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:irassimant/CustomWidgets/CustomBotton.dart';
 import 'package:irassimant/CustomWidgets/ListofTextFeils.dart';
 import 'package:irassimant/Screens/ChoosenCategoryScreen.dart';
-import 'package:irassimant/Screens/ResuletScreen.dart';
 
 class Irbody extends StatefulWidget {
   const Irbody({super.key});

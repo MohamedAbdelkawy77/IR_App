@@ -44,11 +44,11 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
       String document = widget.documents[docId];
       List<String> tokens = document
           .toLowerCase()
-          .replaceAll(RegExp(r'[^\w\s]'), ' ')
+          .replaceAll(
+              RegExp(r'[^\u0600-\u06FF\w\s]'), ' ') // Support Arabic characters
           .split(RegExp(r'\s+'))
           .where((token) => token.isNotEmpty)
           .toList();
-
       for (String term in tokens) {
         // Build inverted index
         if (!invIndex.containsKey(term)) {
@@ -82,26 +82,38 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
 
     // Soundex mapping
     Map<String, String> soundexMap = {
-      'B': '1', 'F': '1', 'P': '1', 'V': '1',
-      'C': '2', 'G': '2', 'J': '2', 'K': '2', 'Q': '2', 'S': '2', 'X': '2', 'Z': '2',
-      'D': '3', 'T': '3',
+      'B': '1',
+      'F': '1',
+      'P': '1',
+      'V': '1',
+      'C': '2',
+      'G': '2',
+      'J': '2',
+      'K': '2',
+      'Q': '2',
+      'S': '2',
+      'X': '2',
+      'Z': '2',
+      'D': '3',
+      'T': '3',
       'L': '4',
-      'M': '5', 'N': '5',
+      'M': '5',
+      'N': '5',
       'R': '6',
     };
 
     // Step 2: Convert letters to digits
     String previousCode = soundexMap[word[0]] ?? '0';
-    
+
     for (int i = 1; i < word.length && soundex.length < 4; i++) {
       String currentCode = soundexMap[word[i]] ?? '0';
-      
+
       // Skip vowels and H, W
       if (currentCode == '0') {
         previousCode = '0';
         continue;
       }
-      
+
       // Skip consecutive duplicates
       if (currentCode != previousCode) {
         soundex += currentCode;
@@ -228,7 +240,8 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.blue.shade700, size: isSmall ? 24 : 28),
+          Icon(Icons.info_outline,
+              color: Colors.blue.shade700, size: isSmall ? 24 : 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -271,7 +284,8 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
         children: [
           Row(
             children: [
-              Icon(Icons.lightbulb_outline, color: Colors.orange.shade700, size: isSmall ? 20 : 24),
+              Icon(Icons.lightbulb_outline,
+                  color: Colors.orange.shade700, size: isSmall ? 20 : 24),
               const SizedBox(width: 8),
               Text(
                 'How Soundex Works',
@@ -293,15 +307,19 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildExampleItem('smith → S530', 'smythe → S530', Colors.green, isSmall),
-          _buildExampleItem('robert → R163', 'rupert → R163', Colors.blue, isSmall),
-          _buildExampleItem('johnson → J525', 'jonson → J525', Colors.purple, isSmall),
+          _buildExampleItem(
+              'smith → S530', 'smythe → S530', Colors.green, isSmall),
+          _buildExampleItem(
+              'robert → R163', 'rupert → R163', Colors.blue, isSmall),
+          _buildExampleItem(
+              'johnson → J525', 'jonson → J525', Colors.purple, isSmall),
         ],
       ),
     );
   }
 
-  Widget _buildExampleItem(String example1, String example2, Color color, bool isSmall) {
+  Widget _buildExampleItem(
+      String example1, String example2, Color color, bool isSmall) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -579,7 +597,8 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
       child: Center(
         child: Column(
           children: [
-            Icon(Icons.search_off, size: isSmall ? 48 : 64, color: Colors.grey.shade400),
+            Icon(Icons.search_off,
+                size: isSmall ? 48 : 64, color: Colors.grey.shade400),
             const SizedBox(height: 12),
             Text(
               'No phonetically similar terms found',
@@ -632,10 +651,11 @@ class _PhoneticSearchResultState extends State<PhoneticSearchResult> {
             ),
             child: Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.green.shade700, size: isSmall ? 20 : 24),
+                Icon(Icons.check_circle,
+                    color: Colors.green.shade700, size: isSmall ? 20 : 24),
                 const SizedBox(width: 8),
                 Text(
-                  'Document $docId',
+                  'Document ${docId + 1}',
                   style: TextStyle(
                     fontSize: isSmall ? 14 : 16,
                     fontWeight: FontWeight.bold,

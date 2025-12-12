@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:irassimant/main.dart';
+import 'package:stemmer/PorterStemmer.dart';
+//import 'package:porter_stemmer_2/porter_stemmer_2.dart'; // Add this import
 
 class DocumentProcessingResult extends StatefulWidget {
   const DocumentProcessingResult({
@@ -20,6 +22,9 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
   int totalOriginalTokens = 0;
   int totalAfterStopwords = 0;
   int totalAfterStemming = 0;
+  
+  // Initialize Porter Stemmer
+  final PorterStemmer stemmer = PorterStemmer();
   
   // Common English stop words
   final Set<String> stopWords = {
@@ -60,7 +65,7 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
       List<String> afterStopwords = _removeStopWords(tokens);
       afterStop += afterStopwords.length;
 
-      // Step 3: Stemming
+      // Step 3: Stemming using Porter Stemmer
       List<String> stemmed = _applyStemming(afterStopwords);
       afterStem += stemmed.length;
 
@@ -84,12 +89,12 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
 
   // Tokenization: split by whitespace and punctuation
   List<String> _tokenize(String text) {
-    return text
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\w\s]'), ' ') // Remove punctuation
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList();
+    return 
+    text.toLowerCase()
+          .replaceAll(RegExp(r'[^\u0600-\u06FF\w\s]'), ' ') // Support Arabic characters
+          .split(RegExp(r'\s+'))
+          .where((token) => token.isNotEmpty)
+          .toList();
   }
 
   // Stop word removal
@@ -97,47 +102,9 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
     return tokens.where((token) => !stopWords.contains(token)).toList();
   }
 
-  // Porter Stemmer Algorithm (simplified version)
+  // Porter Stemmer Algorithm (using library)
   List<String> _applyStemming(List<String> tokens) {
-    return tokens.map((token) => _stem(token)).toList();
-  }
-
-  String _stem(String word) {
-    if (word.length <= 2) return word;
-
-    // Step 1: Remove common suffixes
-    if (word.endsWith('ing') && word.length > 5) {
-      return word.substring(0, word.length - 3);
-    }
-    if (word.endsWith('ed') && word.length > 4) {
-      return word.substring(0, word.length - 2);
-    }
-    if (word.endsWith('ly') && word.length > 4) {
-      return word.substring(0, word.length - 2);
-    }
-    if (word.endsWith('ies') && word.length > 5) {
-      return word.substring(0, word.length - 3) + 'y';
-    }
-    if (word.endsWith('es') && word.length > 4) {
-      return word.substring(0, word.length - 2);
-    }
-    if (word.endsWith('s') && word.length > 3 && !word.endsWith('ss')) {
-      return word.substring(0, word.length - 1);
-    }
-    if (word.endsWith('tion') && word.length > 6) {
-      return word.substring(0, word.length - 4);
-    }
-    if (word.endsWith('ation') && word.length > 7) {
-      return word.substring(0, word.length - 5);
-    }
-    if (word.endsWith('er') && word.length > 4) {
-      return word.substring(0, word.length - 2);
-    }
-    if (word.endsWith('est') && word.length > 5) {
-      return word.substring(0, word.length - 3);
-    }
-
-    return word;
+    return tokens.map((token) => stemmer.stem(token)).toList();
   }
 
   @override
@@ -303,7 +270,7 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
           _buildArrow(isSmall),
           _buildPipelineStep(
             '3',
-            'Stemming',
+            'Porter Stemming',
             'Reduce words to root form',
             Colors.green,
             isSmall,
@@ -417,7 +384,7 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
                 Icon(Icons.description, color: maincolor, size: isSmall ? 20 : 24),
                 const SizedBox(width: 8),
                 Text(
-                  'Document ${doc.docId}',
+                  'Document ${doc.docId+1}',
                   style: TextStyle(
                     fontSize: isSmall ? 14 : 16,
                     fontWeight: FontWeight.bold,
@@ -462,7 +429,7 @@ class _DocumentProcessingResultState extends State<DocumentProcessingResult> {
 
                 // Stemmed
                 _buildTokenList(
-                  'After Stemming (${doc.stemmed.length})',
+                  'After Porter Stemming (${doc.stemmed.length})',
                   doc.stemmed,
                   Colors.green,
                   isSmall,

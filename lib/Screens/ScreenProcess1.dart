@@ -10,7 +10,8 @@ class IndexConstructionResult extends StatefulWidget {
   final List<String> documents;
 
   @override
-  State<IndexConstructionResult> createState() => _IndexConstructionResultState();
+  State<IndexConstructionResult> createState() =>
+      _IndexConstructionResultState();
 }
 
 class _IndexConstructionResultState extends State<IndexConstructionResult> {
@@ -38,10 +39,12 @@ class _IndexConstructionResultState extends State<IndexConstructionResult> {
 
     for (int docId = 0; docId < widget.documents.length; docId++) {
       String document = widget.documents[docId];
-      
+
       // Tokenize: split by whitespace and convert to lowercase
       List<String> tokens = document
           .toLowerCase()
+          .replaceAll(
+              RegExp(r'[^\u0600-\u06FF\w\s]'), ' ') // Support Arabic characters
           .split(RegExp(r'\s+'))
           .where((token) => token.isNotEmpty)
           .toList();
@@ -341,7 +344,7 @@ class _IndexConstructionResultState extends State<IndexConstructionResult> {
                           border: Border.all(color: Colors.blue.shade200),
                         ),
                         child: Text(
-                          'Doc $docId',
+                          'Doc ${docId + 1}',
                           style: TextStyle(
                             fontSize: isSmall ? 11 : 12,
                             fontWeight: FontWeight.w600,
@@ -419,7 +422,7 @@ class _IndexConstructionResultState extends State<IndexConstructionResult> {
                             border: Border.all(color: Colors.green.shade200),
                           ),
                           child: Text(
-                            'Doc ${docEntry.key}',
+                            'Doc ${docEntry.key + 1}',
                             style: TextStyle(
                               fontSize: isSmall ? 11 : 12,
                               fontWeight: FontWeight.w600,
@@ -456,7 +459,7 @@ class _IndexConstructionResultState extends State<IndexConstructionResult> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           );
